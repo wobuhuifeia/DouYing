@@ -1,0 +1,19 @@
+plugins { id 'com.android.application' }
+android {
+ namespace 'com.gathin.douyingecko'
+ compileSdk 35
+ defaultConfig { applicationId 'com.gathin.douyingecko'; minSdk 26; targetSdk 28; versionCode 2; versionName '1.0'; ndk { abiFilters 'armeabi-v7a' } }
+ compileOptions { sourceCompatibility JavaVersion.VERSION_11; targetCompatibility JavaVersion.VERSION_11 }
+ packagingOptions { jniLibs { useLegacyPackaging true } }
+}
+dependencies {
+ implementation files('libs/geckoview-armv7.aar', 'libs/snakeyaml.jar', 'libs/lifecycle-process.aar')
+ implementation 'androidx.core:core:1.12.0'
+ implementation 'androidx.collection:collection:1.0.0'
+ implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.9.23'
+ implementation 'androidx.lifecycle:lifecycle-common:2.3.1'
+}
+
+
+
+

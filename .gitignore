@@ -1,0 +1,5 @@
+*.aar
+*.mp4
+build/
+.gradle/
+local.properties
