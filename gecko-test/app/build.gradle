@@ -2,7 +2,7 @@ plugins { id 'com.android.application' }
 android {
  namespace 'com.gathin.douyingecko'
  compileSdk 35
- defaultConfig { applicationId 'com.gathin.douyingecko'; minSdk 26; targetSdk 28; versionCode 2; versionName '1.0'; ndk { abiFilters 'armeabi-v7a' } }
+ defaultConfig { applicationId 'com.gathin.douyingecko'; minSdk 26; targetSdk 28; versionCode 3; versionName '1.1'; ndk { abiFilters 'armeabi-v7a' } }
  compileOptions { sourceCompatibility JavaVersion.VERSION_11; targetCompatibility JavaVersion.VERSION_11 }
  packagingOptions { jniLibs { useLegacyPackaging true } }
 }
@@ -13,6 +13,7 @@ dependencies {
  implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.9.23'
  implementation 'androidx.lifecycle:lifecycle-common:2.3.1'
 }
+
 
 
 

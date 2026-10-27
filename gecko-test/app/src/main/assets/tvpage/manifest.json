@@ -1,0 +1,12 @@
+{
+  "manifest_version": 2,
+  "name": "tv-page",
+  "version": "1.1",
+  "browser_specific_settings": {"gecko": {"id": "tvpage@douying"}},
+  "content_scripts": [{
+    "matches": ["*://*.douyin.com/*"],
+    "js": ["page.js"],
+    "run_at": "document_idle",
+    "all_frames": false
+  }]
+}

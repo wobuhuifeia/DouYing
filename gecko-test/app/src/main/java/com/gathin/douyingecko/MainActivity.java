@@ -1,5 +1,6 @@
 package com.gathin.douyingecko;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
@@ -31,7 +32,7 @@ public class MainActivity extends Activity {
  private boolean pointerMode;
  private float pointerX;
  private float pointerY;
- private long backAt;
+ private boolean exitAsked;
  private void note(String message) {
   try (FileOutputStream output = new FileOutputStream(new File(getExternalFilesDir(null), "playback-diagnostics.txt"), true)) {
    output.write((System.currentTimeMillis() + " " + message + "\n").getBytes(StandardCharsets.UTF_8));
@@ -77,7 +78,32 @@ public class MainActivity extends Activity {
   down.recycle();
   up.recycle();
  }
- private void toggleMode() {
+
+ private void autoFullscreen() {
+  if (view == null || view.getWidth() == 0) return;
+  long now = SystemClock.uptimeMillis();
+  float x = view.getWidth() - 54f;
+  float y = view.getHeight() - 62f;
+  MotionEvent down = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, x, y, 0);
+  MotionEvent up = MotionEvent.obtain(now, now + 40, MotionEvent.ACTION_UP, x, y, 0);
+  view.getPanZoomController().onMouseEvent(down);
+  view.getPanZoomController().onMouseEvent(up);
+  down.recycle();
+  up.recycle();
+ }
+ private void confirmExit() {
+  if (exitAsked) { finish(); return; }
+  exitAsked = true;
+  AlertDialog dialog = new AlertDialog.Builder(this)
+   .setTitle("退出抖映")
+   .setMessage("再按确认退出")
+   .setPositiveButton("退出", (d, w) -> finish())
+   .setNegativeButton("取消", (d, w) -> exitAsked = false)
+   .setOnCancelListener(d -> exitAsked = false)
+   .create();
+  dialog.show();
+  dialog.getButton(AlertDialog.BUTTON_POSITIVE).requestFocus();
+ } private void toggleMode() {
   pointerMode = !pointerMode;
   if (pointerMode && view != null && pointerX == 0 && pointerY == 0) {
    pointerX = view.getWidth() / 2f;
@@ -95,6 +121,7 @@ public class MainActivity extends Activity {
     String yaml = "prefs:\n  media.hardware-video-decoding.enabled: true\n  media.android-media-codec.enabled: true\n  media.ffvpx.enabled: true\n  media.autoplay.default: 0\n  media.autoplay.blocking_policy: 0\n";
     try (FileOutputStream output = new FileOutputStream(config)) { output.write(yaml.getBytes(StandardCharsets.UTF_8)); }
     runtime = GeckoRuntime.create(this, new GeckoRuntimeSettings.Builder().configFilePath(config.getAbsolutePath()).build());
+    runtime.getWebExtensionController().ensureBuiltIn("resource://android/assets/tvpage/", "tvpage@douying");
    }
    FrameLayout root = new FrameLayout(this);
    view = new GeckoView(this);
@@ -121,7 +148,9 @@ public class MainActivity extends Activity {
    view.requestFocus();
    session.loadUri(HOME);
    handler.post(() -> { pointerX = view.getWidth() / 2f; pointerY = view.getHeight() / 2f; placeCursor(); });
-   Toast.makeText(this, "上下键切视频，确认暂停。菜单键切换光标", Toast.LENGTH_LONG).show();
+   Toast.makeText(this, "上下切视频，确认暂停，菜单切光标，返回后确认退出", Toast.LENGTH_LONG).show();
+   handler.postDelayed(this::autoFullscreen, 5000);
+   handler.postDelayed(this::autoFullscreen, 9000);
   } catch (Throwable error) { fail(error); }
  }
  @Override public boolean dispatchKeyEvent(KeyEvent event) {
@@ -141,7 +170,7 @@ public class MainActivity extends Activity {
    if (code == KeyEvent.KEYCODE_DPAD_UP || code == KeyEvent.KEYCODE_DPAD_DOWN) return send(code);
    if (code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER) return send(KeyEvent.KEYCODE_SPACE);
   }
-  if (code == KeyEvent.KEYCODE_BACK) return send(KeyEvent.KEYCODE_ESCAPE);
+  if (code == KeyEvent.KEYCODE_BACK || (exitAsked && (code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER))) { confirmExit(); return true; }
   return super.dispatchKeyEvent(event);
  }
  @Override protected void onDestroy() {
@@ -149,3 +178,5 @@ public class MainActivity extends Activity {
   super.onDestroy();
  }
 }
+
+
