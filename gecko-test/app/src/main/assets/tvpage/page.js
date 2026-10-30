@@ -1,32 +1,28 @@
-(function () {
-  const hideText = ["AI抖音", "朋友", "关注", "直播", "放映厅", "短剧", "小游戏"];
-  function simplify() {
-    document.querySelectorAll("a,button,div,span,li").forEach(node => {
-      const text = (node.innerText || "").trim();
-      if (hideText.includes(text)) (node.closest("li,a,button") || node).style.setProperty("display", "none", "important");
-    });
-  }
-  function isFullscreen() {
-    return document.fullscreenElement || document.querySelector(".xgplayer-is-cssfullscreen,.xgplayer-is-fullscreen");
-  }
-  function loginVisible() {
-    return Array.from(document.querySelectorAll("div,section")).some(node => (node.innerText || "").includes("登录后免费畅享高清视频") && node.getBoundingClientRect().width > 300);
-  }
-  function fullscreen() {
-    if (isFullscreen() || loginVisible()) return;
-    const button = document.querySelector(".xgplayer-fullscreen,.xgplayer-cssfullscreen,[aria-label*='全屏'],[title*='全屏']");
-    if (button) button.click();
-  }
-  function continuousPlay() {
-    if (!isFullscreen() || loginVisible() || window.douyingContinuousDone) return;
-    const label = Array.from(document.querySelectorAll("span,div,button")).find(node => (node.innerText || "").trim() === "连播" && node.children.length === 0);
-    if (!label) return;
-    const rect = label.getBoundingClientRect();
-    if (rect.width < 10 || rect.bottom < innerHeight - 90) return;
-    const target = document.elementFromPoint(rect.left - 24, rect.top + rect.height / 2);
-    if (target) target.click();
-    window.douyingContinuousDone = true;
-  }
-  setInterval(() => { simplify(); fullscreen(); continuousPlay(); }, 1000);
+(function(){'use strict';
+function prewarm(){document.querySelectorAll('video').forEach(function(v){try{v.preload='auto';v.setAttribute('playsinline','true');v.setAttribute('webkit-playsinline','true');}catch(e){}})}
+var hideText=['AI抖音','朋友','关注','直播','放映厅','短剧','小游戏'];
+function simplify(){document.querySelectorAll('a,button,div,span,li').forEach(function(n){var t=(n.innerText||'').trim();if(hideText.indexOf(t)>=0)(n.closest('li,a,button')||n).style.setProperty('display','none','important');});}
+new MutationObserver(prewarm).observe(document.documentElement,{childList:true,subtree:true});
+setInterval(function(){prewarm();simplify();},500); prewarm(); simplify();
+document.addEventListener('keydown', function(e){
+  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+  var video = activeVideo();
+  if (!video || !isFinite(video.currentTime)) return;
+  e.preventDefault(); e.stopPropagation();
+  video.currentTime = Math.max(0, video.currentTime + (e.key === 'ArrowRight' ? 5 : -5));
+}, true);
+var speedIndex=0, speeds=[1,1.25,1.5];
+function allVideos(){return Array.from(document.querySelectorAll('video'));}
+function activeVideo(){
+ var list=allVideos();
+ return list.find(function(v){var r=v.getBoundingClientRect();return r.width>20&&r.height>20&&r.bottom>0&&r.top<innerHeight;})||list[0];
+}
+document.addEventListener('keydown',function(e){
+ if(e.key==='ArrowUp'||e.key==='ArrowDown') allVideos().forEach(function(v){try{v.pause();}catch(x){}});
+ if(e.key==='f'||e.key==='F'){
+  e.preventDefault();e.stopImmediatePropagation();speedIndex=(speedIndex+1)%speeds.length;
+  allVideos().forEach(function(v){try{v.playbackRate=speeds[speedIndex];}catch(x){}});
+ }
+},true);
+window.addEventListener('pagehide',function(){allVideos().forEach(function(v){try{v.pause();}catch(x){}});});
 })();
-

@@ -1,6 +1,7 @@
 package com.gathin.douyingecko;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
@@ -29,6 +30,8 @@ public class MainActivity extends Activity {
  private GeckoSession session;
  private GeckoView view;
  private View cursor;
+ private View loadingOverlay;
+ private TextView seekIndicator;
  private boolean pointerMode;
  private float pointerX;
  private float pointerY;
@@ -52,18 +55,33 @@ public class MainActivity extends Activity {
   session.getTextInput().onKeyUp(code, new KeyEvent(KeyEvent.ACTION_UP, code));
   return true;
  }
+ private void hideLoadingOverlay() {
+  if (loadingOverlay == null) return;
+  loadingOverlay.animate().alpha(0f).setDuration(120)
+   .withEndAction(() -> loadingOverlay.setVisibility(View.GONE)).start();
+ }
+ private void showSeekIndicator(boolean forward) {
+  if (seekIndicator == null) return;
+  seekIndicator.setText(forward ? "▶ 5s" : "◀ 5s");
+  seekIndicator.setVisibility(View.VISIBLE);
+ }
+ private void hideSeekIndicator() {
+  if (seekIndicator != null) seekIndicator.setVisibility(View.GONE);
+ }
  private void placeCursor() {
   if (cursor == null) return;
-  int size = Math.max(18, (int) (18 * getResources().getDisplayMetrics().density));
+  int size = Math.max(10, (int) (10 * getResources().getDisplayMetrics().density));
   FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(size, size);
   params.leftMargin = Math.round(pointerX - size / 2f);
   params.topMargin = Math.round(pointerY - size / 2f);
   cursor.setLayoutParams(params);
   cursor.setVisibility(pointerMode ? View.VISIBLE : View.GONE);
  }
- private void movePointer(int dx, int dy) {
+ private void movePointer(int dx, int dy, int repeatCount) {
   if (view == null) return;
-  float step = 42 * getResources().getDisplayMetrics().density;
+  float density = getResources().getDisplayMetrics().density;
+  float acceleration = 1f + Math.min(0.8f, repeatCount * 0.06f);
+  float step = 12 * density * acceleration;
   pointerX = Math.max(0, Math.min(view.getWidth() - 1, pointerX + dx * step));
   pointerY = Math.max(0, Math.min(view.getHeight() - 1, pointerY + dy * step));
   placeCursor();
@@ -92,12 +110,12 @@ public class MainActivity extends Activity {
   up.recycle();
  }
  private void confirmExit() {
-  if (exitAsked) { finish(); return; }
+  if (exitAsked) { exitToHome(); return; }
   exitAsked = true;
   AlertDialog dialog = new AlertDialog.Builder(this)
    .setTitle("退出抖映")
    .setMessage("再按确认退出")
-   .setPositiveButton("退出", (d, w) -> finish())
+   .setPositiveButton("退出", (d, w) -> exitToHome())
    .setNegativeButton("取消", (d, w) -> exitAsked = false)
    .setOnCancelListener(d -> exitAsked = false)
    .create();
@@ -111,6 +129,17 @@ public class MainActivity extends Activity {
   }
   placeCursor();
   Toast.makeText(this, pointerMode ? "光标模式：方向键移动，确认点击，菜单切回" : "上下键模式：上下切视频，确认暂停", Toast.LENGTH_SHORT).show();
+ }
+ private void exitToHome() {
+  exitAsked = false;
+  try {
+   Intent home = new Intent(Intent.ACTION_MAIN)
+    .addCategory(Intent.CATEGORY_HOME)
+    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+   startActivity(home);
+  } finally {
+   finish();
+  }
  }
  @Override public void onCreate(Bundle state) {
   super.onCreate(state);
@@ -126,10 +155,25 @@ public class MainActivity extends Activity {
    FrameLayout root = new FrameLayout(this);
    view = new GeckoView(this);
    root.addView(view, new FrameLayout.LayoutParams(-1, -1));
+   loadingOverlay = new TextView(this);
+   ((TextView) loadingOverlay).setText("正在加载画面…");
+   ((TextView) loadingOverlay).setTextColor(Color.WHITE);
+   ((TextView) loadingOverlay).setTextSize(20);
+   ((TextView) loadingOverlay).setGravity(Gravity.CENTER);
+   loadingOverlay.setBackgroundColor(Color.BLACK);
+   root.addView(loadingOverlay, new FrameLayout.LayoutParams(-1, -1));
+   seekIndicator = new TextView(this);
+   seekIndicator.setTextColor(Color.WHITE);
+   seekIndicator.setTextSize(42);
+   seekIndicator.setGravity(Gravity.CENTER);
+   seekIndicator.setBackgroundColor(Color.argb(150, 0, 0, 0));
+   seekIndicator.setVisibility(View.GONE);
+   FrameLayout.LayoutParams seekParams = new FrameLayout.LayoutParams(150, 110, Gravity.CENTER);
+   root.addView(seekIndicator, seekParams);
    cursor = new View(this);
    GradientDrawable dot = new GradientDrawable();
    dot.setShape(GradientDrawable.OVAL);
-   dot.setColor(Color.WHITE);
+   dot.setColor(Color.rgb(0, 255, 80));
    dot.setStroke(Math.max(2, (int) (2 * getResources().getDisplayMetrics().density)), Color.BLACK);
    cursor.setBackground(dot);
    cursor.setVisibility(View.GONE);
@@ -142,6 +186,12 @@ public class MainActivity extends Activity {
     @Override public void onTitleChange(GeckoSession changed, String title) { note("title " + title); }
     @Override public void onCrash(GeckoSession crashed) { note("GECKO CRASH"); Toast.makeText(MainActivity.this, "网页引擎崩溃，请重新打开", Toast.LENGTH_LONG).show(); }
     @Override public void onKill(GeckoSession killed) { note("GECKO KILL"); }
+   });
+   session.setProgressDelegate(new GeckoSession.ProgressDelegate() {
+    @Override public void onPageStart(GeckoSession changed, String uri) {
+     if (loadingOverlay != null) { loadingOverlay.setAlpha(1f); loadingOverlay.setVisibility(View.VISIBLE); }
+    }
+    @Override public void onPageStop(GeckoSession changed, boolean success) { hideLoadingOverlay(); }
    });
    session.open(runtime);
    view.setSession(session);
@@ -156,18 +206,29 @@ public class MainActivity extends Activity {
  @Override public boolean dispatchKeyEvent(KeyEvent event) {
   int code = event.getKeyCode();
   if (event.getAction() != KeyEvent.ACTION_DOWN) {
+   if (code == KeyEvent.KEYCODE_DPAD_LEFT || code == KeyEvent.KEYCODE_DPAD_RIGHT) hideSeekIndicator();
    if (code == KeyEvent.KEYCODE_DPAD_UP || code == KeyEvent.KEYCODE_DPAD_DOWN || code == KeyEvent.KEYCODE_DPAD_LEFT || code == KeyEvent.KEYCODE_DPAD_RIGHT || code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER || code == KeyEvent.KEYCODE_MENU || code == KeyEvent.KEYCODE_BACK) return true;
    return super.dispatchKeyEvent(event);
   }
   if (code == KeyEvent.KEYCODE_MENU) { toggleMode(); return true; }
+  if (!pointerMode && (code == KeyEvent.KEYCODE_DPAD_LEFT || code == KeyEvent.KEYCODE_DPAD_RIGHT)) {
+   showSeekIndicator(code == KeyEvent.KEYCODE_DPAD_RIGHT);
+   return send(code);
+  }
+  if (code == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD || code == KeyEvent.KEYCODE_F) {
+   send(KeyEvent.KEYCODE_F);
+   Toast.makeText(this, "播放速度：切换 1x / 1.25x / 1.5x", Toast.LENGTH_SHORT).show();
+   return true;
+  }
   if (pointerMode) {
-   if (code == KeyEvent.KEYCODE_DPAD_UP) { movePointer(0, -1); return true; }
-   if (code == KeyEvent.KEYCODE_DPAD_DOWN) { movePointer(0, 1); return true; }
-   if (code == KeyEvent.KEYCODE_DPAD_LEFT) { movePointer(-1, 0); return true; }
-   if (code == KeyEvent.KEYCODE_DPAD_RIGHT) { movePointer(1, 0); return true; }
+   if (code == KeyEvent.KEYCODE_DPAD_UP) { movePointer(0, -1, event.getRepeatCount()); return true; }
+   if (code == KeyEvent.KEYCODE_DPAD_DOWN) { movePointer(0, 1, event.getRepeatCount()); return true; }
+   if (code == KeyEvent.KEYCODE_DPAD_LEFT) { movePointer(-1, 0, event.getRepeatCount()); return true; }
+   if (code == KeyEvent.KEYCODE_DPAD_RIGHT) { movePointer(1, 0, event.getRepeatCount()); return true; }
    if (code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER) { clickPointer(); return true; }
   } else {
-   if (code == KeyEvent.KEYCODE_DPAD_UP || code == KeyEvent.KEYCODE_DPAD_DOWN) return send(code);
+   if (code == KeyEvent.KEYCODE_DPAD_UP || code == KeyEvent.KEYCODE_DPAD_DOWN
+     || code == KeyEvent.KEYCODE_DPAD_LEFT || code == KeyEvent.KEYCODE_DPAD_RIGHT) return send(code);
    if (code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER) return send(KeyEvent.KEYCODE_SPACE);
   }
   if (code == KeyEvent.KEYCODE_BACK || (exitAsked && (code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER))) { confirmExit(); return true; }
